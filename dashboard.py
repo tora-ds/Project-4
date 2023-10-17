@@ -50,7 +50,7 @@ st.markdown(f"<h1 style='text-align: center; margin-bottom: 20px;'>U.S. Vehicle 
 @st.cache_data
 def fetch_and_clean_data():
     df = pd.read_csv("vehicles_us.csv")
-    df = df.dropna(subset="model_year").reset_index(drop=True)
+    df = df.dropna(subset=["model_year"]).reset_index(drop=True)
     df["date_posted"] = pd.to_datetime(df["date_posted"])
     df["manufacturer"] = df["model"].apply(lambda x: x.split()[0])
     df["model_year"] = df["model_year"].astype(int)
