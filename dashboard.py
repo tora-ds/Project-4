@@ -53,14 +53,13 @@ def fetch_and_clean_data():
     df = df.dropna(subset=["model_year"]).reset_index(drop=True)
     df["date_posted"] = pd.to_datetime(df["date_posted"])
     df["manufacturer"] = df["model"].apply(lambda x: x.split()[0])
-    df["model_year"] = df["model_year"].astype(int)
     return df
 
 df = fetch_and_clean_data()
 
 # Filters
 st.markdown("<h3>🔍 Filters</h3>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 # Date range filter
 filter_date_range = col1.date_input(
@@ -74,7 +73,7 @@ df_date_filtered = df[
     (df["date_posted"] <= datetime.combine(filter_date_range[1], datetime.max.time()))
 ]
 manufacturers = np.sort(df_date_filtered["manufacturer"].unique())
-default_index = int(np.where(manufacturers == "ford")[0][0]) if "ford" in manufacturers else 0
+default_index = int(np.where(manufacturers == "bmw")[0][0]) if "bmw" in manufacturers else 0
 
 filter_manufacturer = col2.selectbox(
     label="Select Manufacturer",
@@ -83,19 +82,33 @@ filter_manufacturer = col2.selectbox(
 )
 
 # Model year filter
-filter_model_year = col3.selectbox(
-    label="Select Model Year",
-    options=np.sort(df_date_filtered[df_date_filtered["manufacturer"] == filter_manufacturer]["model_year"].unique())[::-1],
-    index=0
-)
+# filter_model_year = col3.selectbox(
+#     label="Select Model Year",
+#     options=np.sort(df_date_filtered[df_date_filtered["manufacturer"] == filter_manufacturer]["model_year"].unique())[::-1],
+#     index=0
+# )
 
 # Slicing the data
 df = df[
     (df["date_posted"] >= datetime.combine(filter_date_range[0], datetime.min.time())) &
     (df["date_posted"] <= datetime.combine(filter_date_range[1], datetime.max.time())) &
-    (df["manufacturer"] == filter_manufacturer) &
-    (df["model_year"] == filter_model_year)
+    (df["manufacturer"] == filter_manufacturer)
+    # (df["model_year"] == filter_model_year)
 ]
+
+def calculate_bounds(column):
+    Q1 = column.quantile(0.25)
+    Q3 = column.quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return lower_bound, upper_bound
+
+price_lower, price_upper = calculate_bounds(df["price"])
+df = df[(df["price"] >= price_lower) & (df["price"] <= price_upper)]
+
+odometer_lower, odometer_upper = calculate_bounds(df["odometer"])
+df = df[(df["odometer"] >= odometer_lower) & (df["odometer"] <= odometer_upper)]
 
 # Charts
 st.markdown("<h3>📊 Charts</h3>", unsafe_allow_html=True)
@@ -144,9 +157,9 @@ with col1:
     )
 
     if choose == "none":
-        fig = px.histogram(df, x="price", histnorm=histnorm_value)
+        fig = px.histogram(df, x="price", histnorm=histnorm_value, nbins=20)
     else:
-        fig = px.histogram(df, x="price", color=choose, histnorm=histnorm_value)
+        fig = px.histogram(df, x="price", histnorm=histnorm_value, nbins=20, color=choose)
 
     fig.update_layout(
         xaxis_title=None,
@@ -168,6 +181,11 @@ with col2:
     trendline_arg = "ols" if regression_line else None
     
     fig = px.scatter(df, x="odometer", y="price", trendline=trendline_arg)
+
+    for trace in fig.data:
+        if trace.type == "scatter" and trace.mode == "lines":
+            trace.line.color = "red"
+
     fig.update_layout(
         xaxis_title="Odometer",
         yaxis_title="Price",
@@ -176,7 +194,6 @@ with col2:
         height=340,
         margin=dict(t=0, b=0, l=0, r=0)
     )
-    fig.update_traces(marker=dict(size=10))
 
     st.plotly_chart(fig, use_container_width=True)
 
